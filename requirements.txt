@@ -1,11 +1,9 @@
-google-play-scraper
 matplotlib
 nltk
 numpy
 pandas
-psycopg2-binary
 pytest
 scikit-learn
 seaborn
-sqlalchemy
 textblob
+yfinance

@@ -1,49 +1,60 @@
-"""Shared configuration for bank app analytics."""
+"""Shared configuration for the Nova Financial Solutions project."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from pathlib import Path
 
-DEFAULT_LANGUAGE = "en"
-DEFAULT_COUNTRY = "et"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = PROJECT_ROOT / "data" / "raw"
+PRICE_DIR = DATA_DIR / "prices"
+REPORTS_DIR = PROJECT_ROOT / "reports"
 
-RAW_COLUMNS = ["review_id", "review", "rating", "date", "bank", "source", "app_name"]
-CLEAN_COLUMNS = ["review", "rating", "date", "bank", "source"]
-ANALYSIS_COLUMNS = [
-    "review_id",
-    "review_text",
-    "rating",
-    "date",
-    "bank",
-    "source",
-    "sentiment_label",
-    "sentiment_score",
-    "sentiment_polarity",
-    "identified_theme",
+NEWS_DATA_CANDIDATES = [
+    DATA_DIR / "raw_analyst_ratings.csv",
+    DATA_DIR / "financial_news.csv",
+    DATA_DIR / "FNSPID.csv",
 ]
 
+DOWNLOAD_PRICE_DIR = Path(r"C:/Users/lenovo/Downloads/yfinance_data/Data")
+TICKERS = ["AAPL", "AMZN", "GOOG", "META", "NVDA"]
 
-@dataclass(frozen=True)
-class BankApp:
-    bank_name: str
-    app_name: str
-    app_id: str
+PRICE_FILE_MAP = {ticker: PRICE_DIR / f"{ticker}.csv" for ticker in TICKERS}
+DOWNLOAD_PRICE_FILE_MAP = {
+    ticker: DOWNLOAD_PRICE_DIR / f"{ticker}.csv" for ticker in TICKERS
+}
 
+POSITIVE_WORDS = {
+    "beat",
+    "bullish",
+    "buy",
+    "gain",
+    "growth",
+    "high",
+    "jump",
+    "outperform",
+    "profit",
+    "rally",
+    "record",
+    "rise",
+    "strong",
+    "surge",
+    "upgrade",
+}
 
-BANK_APPS = (
-    BankApp(
-        bank_name="Commercial Bank of Ethiopia",
-        app_name="Commercial Bank of Ethiopia",
-        app_id="com.combanketh.mobilebanking",
-    ),
-    BankApp(
-        bank_name="Bank of Abyssinia",
-        app_name="BoA Mobile",
-        app_id="com.boa.boaMobileBanking",
-    ),
-    BankApp(
-        bank_name="Dashen Bank",
-        app_name="Dashen Mobile",
-        app_id="com.cr2.amolelight",
-    ),
-)
+NEGATIVE_WORDS = {
+    "bearish",
+    "cut",
+    "decline",
+    "downgrade",
+    "drop",
+    "fall",
+    "fraud",
+    "lawsuit",
+    "loss",
+    "miss",
+    "plunge",
+    "risk",
+    "slump",
+    "weak",
+    "warning",
+}

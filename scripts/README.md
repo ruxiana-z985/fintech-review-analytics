@@ -1,12 +1,12 @@
 # Scripts
 
-The main entry point is:
+Main entry point:
 
 - `python scripts/run_pipeline.py`
 
-Useful modes:
+Useful commands:
 
-- scrape and process fresh Google Play reviews
-- process an existing raw CSV with `--input-csv`
-- save clean datasets, analysis outputs, plots, and a preprocessing report
-- optionally load PostgreSQL with `--load-postgres`
+- `python scripts/run_pipeline.py --copy-price-data`
+- `python scripts/run_pipeline.py --task eda`
+- `python scripts/run_pipeline.py --task indicators`
+- `python scripts/run_pipeline.py --task correlation`

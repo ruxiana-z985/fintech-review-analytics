@@ -1,4 +1,4 @@
-"""Run the end-to-end fintech review analytics pipeline."""
+"""Run the Nova Financial Solutions workflow."""
 
 from __future__ import annotations
 
@@ -6,122 +6,180 @@ import argparse
 import sys
 from pathlib import Path
 
-import pandas as pd
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.database import insert_reviews_to_postgres, prepare_database_frames
-from src.preprocessor import preprocess_dataframe, write_preprocessing_report
-from src.reporting import generate_all_plots
-from src.scraper import ScraperUnavailableError, save_dataframe, scrape_all_banks
-from src.sentiment import build_analysis_dataset
-from src.themes import build_theme_summary, annotate_themes
+import matplotlib.pyplot as plt
+import pandas as pd
+
+from src.config import REPORTS_DIR, TICKERS
+from src.correlation_analysis import (
+    aggregate_daily_sentiment,
+    align_news_to_trading_day,
+    average_return_by_sentiment_bucket,
+    combine_sentiment_and_returns,
+    compute_daily_returns,
+    correlation_by_stock,
+)
+from src.data_loader import copy_price_data, load_all_stock_prices, load_news_data
+from src.eda import (
+    add_headline_length,
+    daily_publication_counts,
+    hourly_publication_counts,
+    publisher_counts,
+    top_bigrams,
+    top_keywords,
+)
+from src.indicators import compute_indicators
+from src.sentiment_analysis import add_sentiment_scores
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Scrape, clean, analyze, and export Ethiopian bank app reviews."
-    )
-    parser.add_argument(
-        "--count-per-bank",
-        type=int,
-        default=500,
-        help="Target number of reviews to collect per bank when scraping.",
-    )
-    parser.add_argument(
-        "--input-csv",
-        type=Path,
-        help="Path to an existing raw review CSV. If provided, scraping is skipped.",
-    )
-    parser.add_argument(
-        "--raw-output",
-        type=Path,
-        default=Path("data/raw/bank_reviews_raw.csv"),
-        help="Where to save the raw scraped reviews.",
-    )
-    parser.add_argument(
-        "--clean-output",
-        type=Path,
-        default=Path("data/processed/bank_reviews_clean.csv"),
-        help="Where to save the cleaned five-column dataset.",
-    )
-    parser.add_argument(
-        "--analysis-output",
-        type=Path,
-        default=Path("data/processed/bank_reviews_analysis.csv"),
-        help="Where to save sentiment and theme outputs.",
-    )
-    parser.add_argument(
-        "--theme-summary-output",
-        type=Path,
-        default=Path("data/processed/bank_theme_summary.csv"),
-        help="Where to save the bank theme summary.",
-    )
-    parser.add_argument(
-        "--report-output",
-        type=Path,
-        default=Path("reports/preprocessing_report.md"),
-        help="Where to save the preprocessing report.",
-    )
-    parser.add_argument(
-        "--plots-dir",
-        type=Path,
-        default=Path("reports/figures"),
-        help="Directory where plots should be written.",
-    )
-    parser.add_argument(
-        "--load-postgres",
-        action="store_true",
-        help="Load the analysis output into PostgreSQL using BANK_REVIEWS_DSN.",
-    )
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--task", choices=["all", "eda", "indicators", "correlation"], default="all")
+    parser.add_argument("--copy-price-data", action="store_true")
     return parser.parse_args()
 
 
-def load_raw_reviews(args: argparse.Namespace) -> pd.DataFrame:
-    if args.input_csv:
-        return pd.read_csv(args.input_csv)
+def write_eda_outputs(news_df: pd.DataFrame) -> None:
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    figures_dir = REPORTS_DIR / "figures"
+    figures_dir.mkdir(parents=True, exist_ok=True)
 
-    try:
-        raw_df = scrape_all_banks(count_per_bank=args.count_per_bank)
-    except ScraperUnavailableError as exc:
-        raise SystemExit(
-            f"{exc}\n"
-            "Install the project requirements and make sure network access is "
-            "available, or pass --input-csv with an existing raw review export."
-        ) from exc
+    eda_df = add_headline_length(news_df)
+    publisher_counts(eda_df).to_csv(REPORTS_DIR / "publisher_counts.csv", index=False)
+    top_keywords(eda_df).to_csv(REPORTS_DIR / "top_keywords.csv", index=False)
+    top_bigrams(eda_df).to_csv(REPORTS_DIR / "top_bigrams.csv", index=False)
 
-    save_dataframe(raw_df, args.raw_output)
-    return raw_df
+    daily_counts = daily_publication_counts(eda_df)
+    hourly_counts = hourly_publication_counts(eda_df)
+
+    plt.figure(figsize=(10, 4))
+    plt.hist(eda_df["headline_length"], bins=30)
+    plt.title("Headline Character Count Distribution")
+    plt.tight_layout()
+    plt.savefig(figures_dir / "headline_length_distribution.png")
+    plt.close()
+
+    plt.figure(figsize=(10, 4))
+    plt.plot(daily_counts["publish_day"], daily_counts["article_count"])
+    plt.title("Daily News Volume")
+    plt.tight_layout()
+    plt.savefig(figures_dir / "daily_news_volume.png")
+    plt.close()
+
+    plt.figure(figsize=(10, 4))
+    plt.bar(hourly_counts["publish_hour"], hourly_counts["article_count"])
+    plt.title("Publication Volume by Hour")
+    plt.tight_layout()
+    plt.savefig(figures_dir / "hourly_news_volume.png")
+    plt.close()
+
+
+def write_indicator_outputs(stock_frames: dict[str, pd.DataFrame]) -> None:
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    figures_dir = REPORTS_DIR / "figures"
+    figures_dir.mkdir(parents=True, exist_ok=True)
+
+    for ticker, df in stock_frames.items():
+        indicator_df = compute_indicators(df)
+        indicator_df.to_csv(REPORTS_DIR / f"{ticker}_indicators.csv", index=False)
+
+        recent = indicator_df.tail(180)
+        fig, axes = plt.subplots(3, 1, figsize=(11, 9), sharex=True)
+        axes[0].plot(recent["Date"], recent["Close"], label="Close")
+        axes[0].plot(recent["Date"], recent["sma_20"], label="SMA 20")
+        axes[0].plot(recent["Date"], recent["ema_20"], label="EMA 20")
+        axes[0].legend()
+        axes[0].set_title(f"{ticker} Price with Moving Averages")
+
+        axes[1].plot(recent["Date"], recent["rsi_14"], color="orange")
+        axes[1].axhline(70, linestyle="--", color="red")
+        axes[1].axhline(30, linestyle="--", color="green")
+        axes[1].set_title(f"{ticker} RSI")
+
+        axes[2].plot(recent["Date"], recent["macd"], label="MACD")
+        axes[2].plot(recent["Date"], recent["macd_signal"], label="Signal")
+        axes[2].bar(recent["Date"], recent["macd_hist"], alpha=0.3)
+        axes[2].legend()
+        axes[2].set_title(f"{ticker} MACD")
+
+        plt.tight_layout()
+        plt.savefig(figures_dir / f"{ticker}_technical_indicators.png")
+        plt.close()
+
+
+def write_correlation_outputs(news_df: pd.DataFrame, stock_frames: dict[str, pd.DataFrame]) -> None:
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    figures_dir = REPORTS_DIR / "figures"
+    figures_dir.mkdir(parents=True, exist_ok=True)
+
+    scored_news = add_sentiment_scores(news_df)
+    combined_frames = []
+
+    for ticker, price_df in stock_frames.items():
+        ticker_news = scored_news[scored_news["stock"] == ticker]
+        if ticker_news.empty:
+            continue
+        aligned = align_news_to_trading_day(ticker_news, price_df)
+        daily_sentiment = aggregate_daily_sentiment(aligned)
+        daily_returns = compute_daily_returns(price_df)
+        combined = combine_sentiment_and_returns(daily_sentiment, daily_returns)
+        combined_frames.append(combined)
+
+    if not combined_frames:
+        raise ValueError("No overlapping stock symbols were found between news and price data.")
+
+    combined_df = pd.concat(combined_frames, ignore_index=True)
+    combined_df.to_csv(REPORTS_DIR / "sentiment_returns_joined.csv", index=False)
+    correlation_by_stock(combined_df).to_csv(REPORTS_DIR / "sentiment_return_correlation.csv", index=False)
+    average_return_by_sentiment_bucket(combined_df).to_csv(
+        REPORTS_DIR / "average_return_by_sentiment_bucket.csv", index=False
+    )
+
+    plt.figure(figsize=(8, 5))
+    plt.scatter(combined_df["average_sentiment"], combined_df["daily_return"], alpha=0.6)
+    corr = combined_df["average_sentiment"].corr(combined_df["daily_return"])
+    plt.title(f"Sentiment vs Daily Return (r = {corr:.3f})")
+    plt.xlabel("Average Daily Sentiment")
+    plt.ylabel("Daily Return (%)")
+    plt.tight_layout()
+    plt.savefig(figures_dir / "sentiment_vs_return_scatter.png")
+    plt.close()
+
+    bucket_df = average_return_by_sentiment_bucket(combined_df)
+    pivot = bucket_df.pivot(index="stock", columns="sentiment_bucket", values="daily_return")
+    pivot.plot(kind="bar", figsize=(10, 5))
+    plt.title("Average Daily Return by Sentiment Bucket")
+    plt.tight_layout()
+    plt.savefig(figures_dir / "average_return_by_sentiment_bucket.png")
+    plt.close()
 
 
 def main() -> None:
     args = parse_args()
+    if args.copy_price_data:
+        copied = copy_price_data()
+        print(f"Copied {len(copied)} price files.")
+        if args.task == "all":
+            return
 
-    raw_df = load_raw_reviews(args)
-    clean_df, report = preprocess_dataframe(raw_df)
-    analysis_df = build_analysis_dataset(clean_df)
-    analysis_df = annotate_themes(analysis_df)
-    theme_summary_df = build_theme_summary(analysis_df)
+    stock_frames = load_all_stock_prices(TICKERS)
 
-    save_dataframe(clean_df, args.clean_output)
-    save_dataframe(analysis_df, args.analysis_output)
-    save_dataframe(theme_summary_df, args.theme_summary_output)
-    write_preprocessing_report(report, args.report_output)
-    generated_plots = generate_all_plots(analysis_df, args.plots_dir)
+    if args.task in {"all", "eda", "correlation"}:
+        news_df = load_news_data()
+    else:
+        news_df = None
 
-    if args.load_postgres:
-        banks_df, reviews_df = prepare_database_frames(analysis_df)
-        inserted_rows = insert_reviews_to_postgres(banks_df, reviews_df)
-        print(f"Loaded {inserted_rows} rows into PostgreSQL.")
+    if args.task in {"all", "eda"}:
+        write_eda_outputs(news_df)
+    if args.task in {"all", "indicators"}:
+        write_indicator_outputs(stock_frames)
+    if args.task in {"all", "correlation"}:
+        write_correlation_outputs(news_df, stock_frames)
 
-    print(
-        f"Raw reviews: {report['raw_count']} | "
-        f"Clean reviews: {report['clean_count']} | "
-        f"Theme rows: {len(theme_summary_df)} | "
-        f"Plots: {len(generated_plots)}"
-    )
+    print("Pipeline finished.")
 
 
 if __name__ == "__main__":

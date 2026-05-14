@@ -1,180 +1,74 @@
-# Fintech Review Analytics
+# News Sentiment Analysis
 
-Customer experience analytics pipeline for Ethiopian fintech apps based on the 10 Academy Week 2 challenge. The project is structured around the four assignment tasks:
+Nova Financial Solutions project for predicting price moves with news sentiment.
 
-1. Scrape Google Play reviews for Commercial Bank of Ethiopia, Bank of Abyssinia, and Dashen Bank.
-2. Clean and standardize the review dataset.
-3. Run sentiment and theme analysis.
-4. Prepare PostgreSQL-ready outputs, plots, and stakeholder-facing summaries.
+## Project Focus
 
-## Assignment Scope
+This repository addresses the Week 1 challenge:
 
-The challenge brief asks for:
+1. Exploratory data analysis on the FNSPID financial news dataset
+2. Technical indicator analysis on stock price data
+3. Correlation analysis between headline sentiment and daily stock returns
 
-- 400+ reviews per bank, or 1,200+ total reviews
-- a clean CSV with `review`, `rating`, `date`, `bank`, and `source`
-- sentiment labels and scores per review
-- recurring theme extraction
-- PostgreSQL schema and insert workflow
-- business-ready insights and visualizations
+## Expected Data
 
-This repository now includes code for each part of that workflow. When the required dependencies are installed and network access is available, the main pipeline can scrape directly from Google Play. If scraping is unavailable in the current environment, the rest of the pipeline can still run from a previously exported CSV.
+Place the financial news dataset in one of these paths:
 
-## Completed Run Snapshot
+- `data/raw/raw_analyst_ratings.csv`
+- `data/raw/financial_news.csv`
+- `data/raw/FNSPID.csv`
 
-The repository has already been executed successfully against live Google Play data on 2026-05-14:
+Stock price CSVs are loaded from either:
 
-- 450 reviews collected for Commercial Bank of Ethiopia
-- 450 reviews collected for Bank of Abyssinia
-- 450 reviews collected for Dashen Bank
-- 1,350 total reviews collected
-- 1,350 clean reviews retained after preprocessing
-- 4 stakeholder-facing figures generated
+- `data/raw/prices/*.csv`
+- or the provided local source folder `C:/Users/lenovo/Downloads/yfinance_data/Data`
 
-Supporting writeups are included in:
+Supported tickers in this submission:
 
-- `reports/task1_summary.md`
-- `reports/task2_summary.md`
-- `reports/task3_summary.md`
-- `reports/final_report.md`
+- `AAPL`
+- `AMZN`
+- `GOOG`
+- `META`
+- `NVDA`
 
-## Project Structure
+## Deliverables in This Repo
 
-```text
-fintech-review-analytics/
-├── .github/workflows/unittests.yml
-├── notebooks/
-│   ├── __init__.py
-│   └── README.md
-├── scripts/
-│   ├── __init__.py
-│   ├── README.md
-│   └── run_pipeline.py
-├── sql/
-│   └── schema.sql
-├── src/
-│   ├── __init__.py
-│   ├── config.py
-│   ├── database.py
-│   ├── preprocessor.py
-│   ├── reporting.py
-│   ├── scraper.py
-│   ├── sentiment.py
-│   └── themes.py
-├── tests/
-│   ├── __init__.py
-│   ├── test_database.py
-│   ├── test_preprocessor.py
-│   ├── test_sentiment.py
-│   └── test_themes.py
-├── .gitignore
-├── pytest.ini
-├── requirements.txt
-└── README.md
-```
+- [notebooks/task_1_eda.ipynb](C:/Users/lenovo/Desktop/fintech-review-analytics/notebooks/task_1_eda.ipynb)
+- [notebooks/task_2_technical_indicators.ipynb](C:/Users/lenovo/Desktop/fintech-review-analytics/notebooks/task_2_technical_indicators.ipynb)
+- [notebooks/task_3_sentiment_correlation.ipynb](C:/Users/lenovo/Desktop/fintech-review-analytics/notebooks/task_3_sentiment_correlation.ipynb)
+- [scripts/run_pipeline.py](C:/Users/lenovo/Desktop/fintech-review-analytics/scripts/run_pipeline.py)
+- [reports/final_report.md](C:/Users/lenovo/Desktop/fintech-review-analytics/reports/final_report.md)
 
-## Review Sources
-
-The pipeline is configured for these Google Play app identifiers:
-
-- `com.combanketh.mobilebanking` for Commercial Bank of Ethiopia
-- `com.boa.boaMobileBanking` for Bank of Abyssinia
-- `com.cr2.amolelight` for Dashen Bank
-
-These app ids were matched from Google Play app listings that were discoverable on May 14, 2026.
-
-## Methodology
-
-### 1. Scraping
-
-The scraper uses `google-play-scraper` to collect:
-
-- review text
-- star rating
-- review date
-- bank and app metadata
-- source label
-
-Target collection is 500 reviews per bank so the final cleaned dataset still clears the 400-review minimum after preprocessing.
-
-### 2. Preprocessing
-
-The cleaning logic:
-
-- drops rows missing review text or rating
-- removes duplicate `review_id` values
-- strips and normalizes review whitespace
-- removes empty reviews after cleaning
-- normalizes dates to `YYYY-MM-DD`
-- filters ratings outside the `1-5` range
-- outputs the required five-column clean dataset
-
-### 3. Sentiment and Theme Analysis
-
-The repository includes a modular baseline pipeline for:
-
-- assigning sentiment labels and scores
-- extracting recurring review themes
-- exporting an analysis-ready CSV
-
-The current implementation uses a tested local lexicon fallback so the codebase remains runnable in constrained environments. The requirements file also includes the libraries needed to upgrade the sentiment stage to VADER, TextBlob, or a transformer-based workflow in a fuller environment.
-
-### 4. Database Engineering
-
-The PostgreSQL layer includes:
-
-- a `banks` table
-- a `reviews` table
-- schema SQL
-- a Python loader that prepares insert-ready frames
-- verification queries for integrity checks
-
-## How To Run
-
-Install dependencies:
+## Setup
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Run the full pipeline by scraping fresh data:
+## Run
+
+Copy the stock price CSVs into the project:
 
 ```bash
-python scripts/run_pipeline.py --count-per-bank 500
+python scripts/run_pipeline.py --copy-price-data
 ```
 
-Run the pipeline from an existing CSV instead of scraping:
+Run the full workflow:
 
 ```bash
-python scripts/run_pipeline.py --input-csv path/to/raw_reviews.csv
+python scripts/run_pipeline.py
 ```
 
-Optional PostgreSQL load after analysis:
+Run task-specific outputs:
 
 ```bash
-set BANK_REVIEWS_DSN=postgresql://username:password@localhost:5432/bank_reviews
-python scripts/run_pipeline.py --input-csv path/to/raw_reviews.csv --load-postgres
+python scripts/run_pipeline.py --task eda
+python scripts/run_pipeline.py --task indicators
+python scripts/run_pipeline.py --task correlation
 ```
 
-## Outputs
+## Notes
 
-The pipeline writes, by default:
-
-- `data/raw/bank_reviews_raw.csv`
-- `data/processed/bank_reviews_clean.csv`
-- `data/processed/bank_reviews_analysis.csv`
-- `data/processed/bank_theme_summary.csv`
-- `reports/figures/*.png`
-- `reports/preprocessing_report.md`
-- `reports/task1_summary.md`
-- `reports/task2_summary.md`
-- `reports/task3_summary.md`
-- `reports/final_report.md`
-
-These outputs are intentionally ignored by Git to match the assignment requirement not to commit datasets.
-
-## Limitations
-
-- Google Play scraping depends on external network access and the `google-play-scraper` package.
-- Transformer-based sentiment analysis is referenced in the assignment but is not hard-coded into tests, so the repo stays lightweight and CI-friendly.
-- If Google Play returns fewer than the requested reviews for any bank, the limitation should be documented in the final report together with the date range actually collected.
+- Sentiment scoring uses VADER when available and falls back to a lightweight lexicon scorer.
+- Technical indicators use TA-Lib when available and fall back to pandas implementations.
+- The correlation step aligns weekend and holiday news to the next trading day.

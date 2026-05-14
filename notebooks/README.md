@@ -1,13 +1,9 @@
 # Notebooks
 
-Use this folder for exploratory notebooks, EDA, and blog-report draft analysis.
+This folder contains the three assignment notebooks:
 
-Suggested notebook flow:
+1. `task_1_eda.ipynb`
+2. `task_2_technical_indicators.ipynb`
+3. `task_3_sentiment_correlation.ipynb`
 
-1. Raw scraping validation
-2. Data quality audit
-3. Sentiment experiments
-4. Theme exploration
-5. Insight plotting for the final report
-
-Keep the production pipeline in `src/` and `scripts/` so notebook work stays reproducible.
+The reusable logic lives in `src/`, while the notebooks show the analysis flow expected in the submission.
