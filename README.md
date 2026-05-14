@@ -20,6 +20,24 @@ The challenge brief asks for:
 
 This repository now includes code for each part of that workflow. When the required dependencies are installed and network access is available, the main pipeline can scrape directly from Google Play. If scraping is unavailable in the current environment, the rest of the pipeline can still run from a previously exported CSV.
 
+## Completed Run Snapshot
+
+The repository has already been executed successfully against live Google Play data on 2026-05-14:
+
+- 450 reviews collected for Commercial Bank of Ethiopia
+- 450 reviews collected for Bank of Abyssinia
+- 450 reviews collected for Dashen Bank
+- 1,350 total reviews collected
+- 1,350 clean reviews retained after preprocessing
+- 4 stakeholder-facing figures generated
+
+Supporting writeups are included in:
+
+- `reports/task1_summary.md`
+- `reports/task2_summary.md`
+- `reports/task3_summary.md`
+- `reports/final_report.md`
+
 ## Project Structure
 
 ```text
@@ -148,6 +166,10 @@ The pipeline writes, by default:
 - `data/processed/bank_theme_summary.csv`
 - `reports/figures/*.png`
 - `reports/preprocessing_report.md`
+- `reports/task1_summary.md`
+- `reports/task2_summary.md`
+- `reports/task3_summary.md`
+- `reports/final_report.md`
 
 These outputs are intentionally ignored by Git to match the assignment requirement not to commit datasets.
 
